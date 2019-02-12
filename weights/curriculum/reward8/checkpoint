@@ -1,0 +1,2 @@
+model_checkpoint_path: "safe-drive-with-overtaking-700-2000DDPG.ckpt-461818"
+all_model_checkpoint_paths: "safe-drive-with-overtaking-700-2000DDPG.ckpt-461818"
