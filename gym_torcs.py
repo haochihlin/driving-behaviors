@@ -18,6 +18,11 @@ def relu(x):
         return x
 
 
+
+def potential(alpha, beta, gamma, min_front, sp):
+
+    return alpha*(np.exp(-beta*relu(gamma - min_front)))*sp #*(np.cos(theta) - np.abs(np.sin(theta)))
+
 class TorcsEnv:
     terminal_judge_start = 20      # If after 100 timestep still no progress, terminated
     termination_limit_progress = 0.1  # [km/h], episode terminates if car is running slower than this limit
@@ -36,13 +41,13 @@ class TorcsEnv:
         self.initial_run = True
         self.time_step = 0
 
-        self.currState = None 
+        self.currState = None
 
         # os.system(u'torcs -nofuel -nodamage -nolaptime &')
         # time.sleep(1.0)
         # os.system(u'sh scripts/autostart.sh')
 
-        # Now the action_space and observation_space are actually being used, just like in OpenAI's gym 
+        # Now the action_space and observation_space are actually being used, just like in OpenAI's gym
         if throttle is False:                           # Throttle is generally True
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,))
         else:
@@ -61,7 +66,7 @@ class TorcsEnv:
         else:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf, 255], dtype=theano.config.floatX)
             low = np.array([0., -np.inf, -np.inf, -np.inf, 0., -np.inf, 0., -np.inf, 0], dtype=theano.config.floatX)
-            self.observation_space = spaces.Box(low=low, high=high)			
+            self.observation_space = spaces.Box(low=low, high=high)
 
     def terminate(self):
         episode_terminate = True
@@ -137,8 +142,8 @@ class TorcsEnv:
 
         # Make an obsevation from a raw observation vector from TORCS
         self.observation = self.make_observation(obs)
-        self.currState = np.hstack((self.observation.angle, self.observation.track, self.observation.trackPos, 
-                                    self.observation.speedX, self.observation.speedY,  self.observation.speedZ, 
+        self.currState = np.hstack((self.observation.angle, self.observation.track, self.observation.trackPos,
+                                    self.observation.speedX, self.observation.speedY,  self.observation.speedZ,
                                     self.observation.wheelSpinVel/100.0, self.observation.rpm))
 
         # Reward setting Here #######################################
@@ -146,16 +151,17 @@ class TorcsEnv:
         track = np.array(obs['track'])
         trackPos = np.array(obs['trackPos'])
         sp = np.array(obs['speedX'])
+        sp_pre = np.array(obs_pre['speedX'])
         damage = np.array(obs['damage'])
         rpm = np.array(obs['rpm'])
-        alpha = 100; beta=0.1; beta2=0.3; gamma = 40; const = 10 #; delta=20; sigma=30
+        alpha = 100; beta=0.1; beta2=0.3; gamma = 30; const = 10 #; delta=20; sigma=30
         decel = obs_pre['speedX'] - obs['speedX']
         accel = -1*decel
         if decel < 0:
             decel = 0
         else:
             accel = 0
-        min_front = min(obs_pre['opponents'][15:20]); min_dist = min(obs_pre['opponents'])
+        # min_front = min(obs_pre['opponents'][15:20]); min_dist = min(obs_pre['opponents'])
         norm_lane_keeping = np.cos(obs['angle']) - np.abs(np.sin(obs['angle']))
         #progress = 2*alpha*(np.exp(-beta*min_front))*decel + alpha*(np.exp(-(min_front - gamma)**2/sigma))*accel
         # print(min_front)
@@ -163,8 +169,8 @@ class TorcsEnv:
         #if np.abs(obs['angle']*180/3.1416) > 25:# and min_front==200.:
         #     flag = 0.
         #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*sp # Velocity Reward
-        #progress =  alpha*(np.exp(-4*beta*relu(gamma-min_front)))*np.clip(accel, 0, 5) #3*alpha*(np.exp(-beta*min_front))*decel 
-        #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel + alpha*(np.exp(-4*beta*relu(min_dist-gamma+10)))*10 # Stable Reward# Reward4 
+        #progress =  alpha*(np.exp(-4*beta*relu(gamma-min_front)))*np.clip(accel, 0, 5) #3*alpha*(np.exp(-beta*min_front))*decel
+        #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel + alpha*(np.exp(-4*beta*relu(min_dist-gamma+10)))*10 # Stable Reward# Reward4
         #progress = 3*alpha*(np.exp(-beta*min_front))*decel + alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel # Weighted Reward
         #progress = alpha*(np.exp(-beta1*relu(gamma-min_front) - beta2*relu(min_front - gamma - delta)))
         # progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel + const
@@ -174,19 +180,21 @@ class TorcsEnv:
         #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*np.clip(accel, 0, 1)  + alpha*(np.exp(-4*beta*min_front))*np.clip(decel, 0, 1)# Reward 4
         #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel + alpha*(np.exp(-beta*relu(min_front-gamma+10)))*10 #+ alpha*(17 -obs['racePos'])*10# Reward5
         #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*accel + alpha*np.heaviside(gamma - min_front, 1)*10 # Reward6
-        #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*sp + 
+        #progress = alpha*(np.exp(-4*beta*relu(gamma-min_front)))*sp +
         #progress = alpha*np.heaviside(gamma - min_dist, 1)*10 # Reward7
-        #progress = alpha*np.heaviside(gamma - min_front, 1)*10*np.heaviside(min_front - (gamma-20), 1) + alpha*(17 - obs['racePos'])*10*np.heaviside(min_dist-gamma+20, 1) + sp # Reward 8 
+        #progress = alpha*np.heaviside(gamma - min_front, 1)*10*np.heaviside(min_front - (gamma-20), 1) + alpha*(17 - obs['racePos'])*10*np.heaviside(min_dist-gamma+20, 1) + sp # Reward 8
         #progress = (alpha*np.heaviside(gamma -min_front, 1) + 1000*(obs_pre['racePos'] - obs['racePos'])*np.heaviside(min_dist-10,1))*np.heaviside(min_front-gamma+25, 1) + sp # Reward 10
-        
-        progress = 0*alpha*np.heaviside(gamma - min_front, 1)*10*np.heaviside(min_dist - 8, 1) + sp # Velocity Reward
-        reward = progress*norm_lane_keeping
+
+        # progress = alpha*np.heaviside(gamma - min_front, 1)*10*np.heaviside(min_dist - 8, 1) + sp # Velocity Reward
+        progress = sp
+        reward_shaping = 0.999*potential(alpha, beta, gamma, min(obs['opponents'][15:20]), sp) - potential(alpha, beta, gamma, min(obs_pre['opponents'][15:20]), sp_pre)
+        reward = progress*norm_lane_keeping + reward_shaping
         # Termination judgement #########################
         episode_terminate = False
         # collision detection
         # if self.teriiiminal_judge_start < self.time_step:
         if obs['damage'] - obs_pre['damage'] > 0:
-                reward = -obs_pre['speedX']**2
+                reward = -500 #obs_pre['speedX']**2
                 episode_terminate = True
                 client.R.d['meta'] = True
                 print('Collision detected')
@@ -199,16 +207,16 @@ class TorcsEnv:
                  episode_terminate = True
                  client.R.d['meta'] = True
                  print('Terminating because Out of Track')
-        
 
-        if self.terminal_judge_start < self.time_step: # Episode terminates if the progress of agent is small
-             if ( (sp < 1.) and early_stop ):
-                #pass
-                # print("No progress")
-                reward = -1000
-                episode_terminate = True
-                client.R.d['meta'] = True
-                print('Terminating because Small Progress')
+
+        # if self.terminal_judge_start < self.time_step: # Episode terminates if the progress of agent is small
+        #      if ( (sp < 1.) and early_stop ):
+        #         #pass
+        #         # print("No progress")
+        #         reward = -500
+        #         episode_terminate = True
+        #         client.R.d['meta'] = True
+        #         print('Terminating because Small Progress')
 
         # if np.cos(obs['angle']) < 0: # Episode is terminated if the agent runs backward
         #     #reward = 0
@@ -249,12 +257,12 @@ class TorcsEnv:
         output = 1
         # client = self.client
         client.get_servers_input(0)  # Get the initial input from torcs
-        #if output is not -1 : 
-           
+        #if output is not -1 :
+
         obs = client.S.d  # Get the current full-observation from torcs
         self.observation = self.make_observation(obs)
-        self.currState = np.hstack((self.observation.angle, self.observation.track, self.observation.trackPos, 
-                                    self.observation.speedX, self.observation.speedY,  self.observation.speedZ, 
+        self.currState = np.hstack((self.observation.angle, self.observation.track, self.observation.trackPos,
+                                    self.observation.speedX, self.observation.speedY,  self.observation.speedZ,
                                     self.observation.wheelSpinVel/100.0, self.observation.rpm))
 
         self.last_u = None
@@ -316,7 +324,7 @@ class TorcsEnv:
                      'speedX', 'speedY', 'speedZ', 'angle', 'damage',
                      'opponents',
                      'rpm',
-                     'track', 
+                     'track',
                      'trackPos',
                      'wheelSpinVel']
             Observation = col.namedtuple('Observaion', names)
